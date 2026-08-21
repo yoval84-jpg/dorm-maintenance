@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ניהול משימות / Tareas</title>
     <link rel="manifest" href="manifest.json">
-    <!-- ספריית SortableJS לגרירת משימות נוחה בנייד -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
@@ -19,11 +18,16 @@
         .btn-green { background-color: #198754; } .btn-green:hover { background-color: #157347; }
         .btn-red { background-color: #dc3545; } .btn-red:hover { background-color: #bb2d3b; }
         
-        .task-card { background: #fdfdfd; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e1e1e1; overflow: hidden; }
+        .task-card { background: #fdfdfd; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e1e1e1; overflow: hidden; transition: all 0.3s ease; }
         .task-header { padding: 15px; font-size: 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .task-header:hover { background: #f8f9fa; }
         .task-actions { padding: 15px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 10px; }
-        .task-actions button { margin-bottom: 0; flex: 1; }
+        .task-actions button { margin-bottom: 0; flex: 1; padding: 15px; font-size: 16px; }
+        
+        .first-task-card { border: 2px solid #0056b3; box-shadow: 0 4px 12px rgba(0,86,179,0.15); }
+        .first-task-card .task-header { font-size: 24px; font-weight: bold; color: #0056b3; padding: 20px; cursor: default; }
+        .first-task-card .task-header:hover { background: #fdfdfd; }
+        .first-task-card .task-actions { padding: 20px; border-top: 2px solid #eee; }
         
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; }
         .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; }
@@ -34,10 +38,12 @@
         .badge-green { background: #198754; } .badge-red { background: #dc3545; } .badge-orange { background: #fd7e14; }
         .task-img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
         
-        /* עיצוב ידית הגרירה */
         .drag-handle { font-size: 24px; color: #adb5bd; cursor: grab; padding-right: 10px; user-select: none; }
         .drag-handle:active { cursor: grabbing; color: #495057; }
         .sortable-ghost { opacity: 0.4; background-color: #f8f9fa; }
+        
+        .toggle-history-btn { background: transparent; color: #333; font-size: 22px; width: auto; margin: 0; padding: 5px; border: none; box-shadow: none; border-radius: 50%; }
+        .toggle-history-btn:hover { background: #e9ecef; }
     </style>
 </head>
 <body>
@@ -69,8 +75,12 @@
         <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px; color: #fd7e14;">ממתין לווידוא מנהל</h3>
         <ul id="list-pending" class="manager-list"></ul>
 
-        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px; color: #6c757d;">היסטוריה (הושלם)</h3>
-        <ul id="list-history" class="manager-list"></ul>
+        <!-- כותרת היסטוריה עם כפתור שעון -->
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; margin-top: 30px; padding-bottom: 5px;">
+            <h3 style="margin: 0; color: #6c757d; border: none; padding: 0;">היסטוריה (הושלם)</h3>
+            <button class="toggle-history-btn" onclick="toggleHistory()" title="הצג/הסתר היסטוריה">🕒</button>
+        </div>
+        <ul id="list-history" class="manager-list hidden"></ul>
     </div>
 
     <!-- מסך עובד -->
@@ -94,7 +104,7 @@
     <script>
         let tasks = JSON.parse(localStorage.getItem('tasks_v2')) || [];
         let currentTaskId = null;
-        let activeSortable = null; // משתנה לשמירת מנגנון הגרירה
+        let activeSortable = null;
 
         function saveTasks() { localStorage.setItem('tasks_v2', JSON.stringify(tasks)); }
 
@@ -116,6 +126,19 @@
 
         function logout() { location.reload(); }
 
+        function toggleHistory() {
+            const historyList = document.getElementById('list-history');
+            historyList.classList.toggle('hidden');
+        }
+
+        // חישוב ימים שעברו
+        function getDaysWaiting(task) {
+            // תמיכה לאחור במשימות ישנות שאין להן תאריך יצירה שמור
+            const createdAt = task.createdAt || Math.floor(task.id); 
+            const days = Math.floor((Date.now() - createdAt) / (1000 * 60 * 60 * 24));
+            return days;
+        }
+
         async function addTasks() {
             const input = document.getElementById('task-input').value.trim();
             const reqVerify = document.getElementById('require-verification').checked;
@@ -129,6 +152,7 @@
                 let spanishText = await translateText(line, 'he', 'es');
                 tasks.push({
                     id: Date.now() + Math.random(),
+                    createdAt: Date.now(),
                     he: line,
                     es: spanishText,
                     requireVerification: reqVerify,
@@ -155,12 +179,17 @@
 
             tasks.forEach(task => {
                 const li = document.createElement('li');
+                const days = getDaysWaiting(task);
+                const daysText = days === 0 ? 'נוצר היום' : `ממתין ${days} ימים`;
+                const waitHtml = `<div style="font-size: 13px; color: #888; margin-bottom: 5px;">⏳ ${daysText}</div>`;
                 
                 if (task.status === 'active') {
-                    li.dataset.id = task.id; // שמירת המזהה לצורך גרירה
+                    li.dataset.id = task.id; 
                     let html = `<div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                                    <div><strong>${task.he}</strong><br>`;
-                    
+                                    <div>
+                                        <strong>${task.he}</strong><br>
+                                        ${waitHtml}
+                                        `;
                     if (task.requireVerification) html += `<span class="badge badge-orange" style="margin-top:5px;">דורש וידוא</span>`;
                     html += `<br><button class="btn-red" style="padding:5px 10px; margin-top:10px; width:auto;" onclick="deleteTask(${task.id})">מחק</button>
                                     </div>
@@ -170,7 +199,7 @@
                     listActive.appendChild(li);
                 } 
                 else if (task.status === 'pending') {
-                    let html = `<strong>${task.he}</strong><br>`;
+                    let html = `<strong>${task.he}</strong><br>${waitHtml}`;
                     const badgeClass = task.action === 'fixed' ? 'badge-green' : 'badge-red';
                     const badgeText = task.action === 'fixed' ? 'תוקן ✅' : 'לא תוקן ⚠️';
                     html += `<span class="badge ${badgeClass}" style="margin-top:5px;">${badgeText}</span><br>`;
@@ -181,7 +210,7 @@
                     listPending.appendChild(li);
                 } 
                 else if (task.status === 'history') {
-                    let html = `<strong>${task.he}</strong><br>`;
+                    let html = `<strong>${task.he}</strong><br>${waitHtml}`;
                     const badgeClass = task.action === 'fixed' ? 'badge-green' : 'badge-red';
                     const badgeText = task.action === 'fixed' ? 'תוקן ✅' : 'לא תוקן ⚠️';
                     html += `<span class="badge ${badgeClass}" style="margin-top:5px;">${badgeText}</span>`;
@@ -192,20 +221,18 @@
                 }
             });
 
-            // הפעלת מנגנון הגרירה (Drag and Drop)
             if (activeSortable) activeSortable.destroy();
             activeSortable = Sortable.create(listActive, {
                 animation: 150,
-                handle: '.drag-handle', // אפשר לגרור רק מהידית
+                handle: '.drag-handle', 
                 ghostClass: 'sortable-ghost',
                 onEnd: function () {
-                    // סדר את המערך מחדש לפי הסדר החדש במסך
                     const newOrderIds = Array.from(listActive.children).map(li => Number(li.dataset.id));
                     const activeTasks = newOrderIds.map(id => tasks.find(t => t.id === id));
                     const otherTasks = tasks.filter(t => t.status !== 'active');
                     
-                    tasks = [...activeTasks, ...otherTasks]; // מיזוג המשימות הפעילות החדשות עם השאר
-                    saveTasks(); // שמירה - העובד יראה את זה מיד!
+                    tasks = [...activeTasks, ...otherTasks]; 
+                    saveTasks(); 
                 }
             });
         }
@@ -222,25 +249,47 @@
         function renderWorker() {
             const list = document.getElementById('worker-list');
             list.innerHTML = '';
-            tasks.filter(t => t.status === 'active').forEach(task => {
+            
+            const activeTasks = tasks.filter(t => t.status === 'active');
+            
+            activeTasks.forEach((task, index) => {
+                const isFirst = index === 0;
+                
+                const days = getDaysWaiting(task);
+                const daysText = days === 0 ? 'Hoy' : `Hace ${days} días`;
+                
                 const card = document.createElement('div');
-                card.className = 'task-card';
+                card.className = 'task-card' + (isFirst ? ' first-task-card' : '');
+                
+                const arrow = isFirst ? '' : '<span>🔽</span>';
+                const actionsHidden = isFirst ? '' : 'hidden';
+                const toggleFunc = isFirst ? '' : `onclick="toggleCard(${task.id})"`;
+                
                 card.innerHTML = `
-                    <div class="task-header" onclick="toggleCard(${task.id})">
-                        <span>🔧 ${task.es}</span> <span>🔽</span>
+                    <div class="task-header" ${toggleFunc}>
+                        <div>
+                            <span>🔧 ${task.es}</span><br>
+                            <span style="font-size: 13px; color: #888; font-weight: normal;">⏳ ${daysText}</span>
+                        </div>
+                        ${arrow}
                     </div>
-                    <div class="task-actions hidden" id="actions-${task.id}">
+                    <div class="task-actions ${actionsHidden}" id="actions-${task.id}">
                         <button class="btn-green" onclick="markFixed(${task.id})">✅ Reparado</button>
                         <button class="btn-red" onclick="openCantFix(${task.id})">⚠️ No se puede</button>
                     </div>
                 `;
                 list.appendChild(card);
             });
+            
             if (list.innerHTML === '') list.innerHTML = '<h3 style="text-align:center; color:#888;">No hay tareas 🎉</h3>';
         }
 
         function toggleCard(id) {
-            document.querySelectorAll('.task-actions').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.task-actions').forEach(el => {
+                if (!el.parentElement.classList.contains('first-task-card')) {
+                    el.classList.add('hidden');
+                }
+            });
             document.getElementById(`actions-${id}`).classList.remove('hidden');
         }
 
