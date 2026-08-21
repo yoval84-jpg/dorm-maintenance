@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ניהול תיקונים</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0056b3">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); position: relative;}
+        .hidden { display: none !important; }
+        h2, h3 { text-align: center; color: #333; margin-top: 0; }
+        textarea, button { width: 100%; margin-bottom: 15px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; font-family: inherit; }
+        button { cursor: pointer; font-weight: bold; border: none; color: white; transition: 0.2s; }
+        
+        .btn-blue { background-color: #0056b3; } .btn-blue:hover { background-color: #004494; }
+        .btn-gray { background-color: #6c757d; } .btn-gray:hover { background-color: #5a6268; }
+        .btn-green { background-color: #198754; } .btn-red { background-color: #dc3545; }
+        
+        .manager-list { list-style: none; padding: 0; }
+        .manager-list li { background: #fff; border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 8px; position: relative; display: flex; justify-content: space-between; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; margin-bottom: 10px; }
+        .badge-green { background: #198754; } .badge-red { background: #dc3545; } .badge-orange { background: #fd7e14; }
+        .task-img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+        
+        .drag-handle { font-size: 24px; color: #adb5bd; cursor: grab; padding-right: 10px; user-select: none; }
+        .sortable-ghost { opacity: 0.4; background-color: #f8f9fa; }
+        .toggle-history-btn { background: transparent; color: #333; font-size: 22px; width: auto; margin: 0; padding: 5px; border: none; box-shadow: none; border-radius: 50%; }
+        .sync-indicator { font-size: 12px; color: #888; text-align: center; margin-bottom: 15px; }
+
+        /* סגנונות לתצוגת העובד המדומה */
+        #worker-preview { background-color: #e9ecef; border: 2px dashed #6c757d; }
+        .task-card { background: #fdfdfd; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e1e1e1; overflow: hidden; }
+        .task-header { padding: 15px; font-size: 18px; display: flex; justify-content: space-between; align-items: center; }
+        .task-actions { padding: 15px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 10px; pointer-events: none; opacity: 0.7;}
+        .task-actions button { margin-bottom: 0; flex: 1; padding: 15px; font-size: 16px; }
+        .first-task-card { border: 2px solid #0056b3; box-shadow: 0 4px 12px rgba(0,86,179,0.15); }
+        .first-task-card .task-header { font-size: 24px; font-weight: bold; color: #0056b3; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <!-- מסך ניהול מרכזי -->
+    <div class="container" id="manager-screen">
+        <button onclick="toggleWorkerPreview()" style="position: absolute; top: 15px; left: 15px; width: auto; padding: 5px 10px; background: #6c757d; border-radius: 5px; font-size: 12px;">👁️ תצוגת עובד</button>
+        
+        <h2>ניהול משימות</h2>
+        <div id="sync-indicator" class="sync-indicator hidden">🔄 מסנכרן נתונים עכשיו...</div>
+        
+        <textarea id="task-input" rows="4" placeholder="הכנס משימות (כל שורה משימה נפרדת)"></textarea>
+        <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer; font-weight: bold;">
+            <input type="checkbox" id="require-verification" style="width: 20px; margin: 0;">
+            🔍 דרוש וידוא מנהל לאחר ביצוע
+        </label>
+        <button class="btn-blue" id="add-btn" onclick="addTasks()">תרגם והוסף משימות</button>
+
+        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px;">משימות פעילות (ניתן לגרור)</h3>
+        <ul id="list-active" class="manager-list"></ul>
+
+        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px; color: #fd7e14;">ממתין לווידוא מנהל</h3>
+        <ul id="list-pending" class="manager-list"></ul>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; margin-top: 30px; padding-bottom: 5px;">
+            <h3 style="margin: 0; color: #6c757d; border: none; padding: 0;">היסטוריה</h3>
+            <button class="toggle-history-btn" onclick="document.getElementById('list-history').classList.toggle('hidden')">🕒</button>
+        </div>
+        <ul id="list-history" class="manager-list hidden"></ul>
+    </div>
+
+    <!-- מסך תצוגת עובד למנהל -->
+    <div class="container hidden" id="worker-preview" dir="ltr">
+        <h2 style="color: #6c757d;">Vista previa del empleado</h2>
+        <p style="text-align: center; color: #888; font-size: 13px; margin-top:-10px;">(תצוגה בלבד - הכפתורים לא פעילים)</p>
+        <div id="preview-list"></div>
+        <button class="btn-gray" onclick="toggleWorkerPreview()" style="margin-top: 20px;">חזור למסך ניהול</button>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbwMMOW3IHeeWJGq7rsS0ptkl_JmiI01i39fhAFUOoHuLdLWPTQsu_Da8TIki0xCNqLTDA/exec";
+        let tasks = JSON.parse(localStorage.getItem('tasks_manager')) || [];
+        let activeSortable = null;
+        let isSyncing = false;
+
+        async function syncFromCloud() {
+            if (isSyncing || (activeSortable && document.querySelector('.sortable-ghost'))) return;
+            isSyncing = true;
+            try {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                if(data && data.tasks && JSON.stringify(tasks) !== JSON.stringify(data.tasks)) {
+                    tasks = data.tasks;
+                    localStorage.setItem('tasks_manager', JSON.stringify(tasks));
+                    renderManager();
+                }
+            } catch (e) {}
+            isSyncing = false;
+        }
+
+        async function saveTasks() {
+            localStorage.setItem('tasks_manager', JSON.stringify(tasks)); 
+            document.getElementById('sync-indicator').classList.remove('hidden');
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ actionType: 'SAVE_ALL', tasks: tasks }) });
+            } catch (e) {}
+            document.getElementById('sync-indicator').classList.add('hidden');
+        }
+
+        async function translateText(text, from, to) {
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+                const data = await res.json();
+                return data.responseData.translatedText;
+            } catch (e) { return text; }
+        }
+
+        function getDaysWaiting(task) {
+            const createdAt = task.createdAt || Math.floor(task.id); 
+            return Math.floor((Date.now() - createdAt) / (1000 * 60 * 60 * 24));
+        }
+
+        async function addTasks() {
+            const input = document.getElementById('task-input').value.trim();
+            const reqVerify = document.getElementById('require-verification').checked;
+            if (!input) return;
+            const lines = input.split('\n').map(l => l.trim()).filter(l => l !== '');
+            document.getElementById('add-btn').disabled = true;
+
+            for (let line of lines) {
+                let spanishText = await translateText(line, 'he', 'es');
+                tasks.push({
+                    id: Date.now() + Math.random(), createdAt: Date.now(),
+                    he: line, es: spanishText, requireVerification: reqVerify,
+                    status: 'active', action: null, noteHe: '', img: null
+                });
+            }
+            await saveTasks();
+            document.getElementById('task-input').value = '';
+            document.getElementById('require-verification').checked = false;
+            document.getElementById('add-btn').disabled = false;
+            renderManager();
+        }
+
+        function renderManager() {
+            const listActive = document.getElementById('list-active');
+            const listPending = document.getElementById('list-pending');
+            const listHistory = document.getElementById('list-history');
+            listActive.innerHTML = ''; listPending.innerHTML = ''; listHistory.innerHTML = '';
+
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                const days = getDaysWaiting(task);
+                const waitHtml = `<div style="font-size: 13px; color: #888; margin-bottom: 5px;">⏳ ${days === 0 ? 'נוצר היום' : `ממתין ${days} ימים`}</div>`;
+                
+                if (task.status === 'active') {
+                    li.dataset.id = task.id; 
+                    let html = `<div><strong>${task.he}</strong><br>${waitHtml}`;
+                    if (task.requireVerification) html += `<span class="badge badge-orange" style="margin-top:5px;">דורש וידוא</span>`;
+                    html += `<br><button class="btn-red" style="padding:5px 10px; margin-top:10px; width:auto;" onclick="deleteTask(${task.id})">מחק</button></div><div class="drag-handle">☰</div>`;
+                    li.innerHTML = html; listActive.appendChild(li);
+                } 
+                else if (task.status === 'pending') {
+                    let html = `<div><strong>${task.he}</strong><br>${waitHtml}<span class="badge ${task.action === 'fixed' ? 'badge-green' : 'badge-red'}">${task.action === 'fixed' ? 'תוקן ✅' : 'לא תוקן ⚠️'}</span><br>`;
+                    if (task.noteHe) html += `<p style="margin:5px 0; background:#f0f0f0; padding:8px; border-radius:5px;"><strong>הערת עובד:</strong> ${task.noteHe}</p>`;
+                    if (task.img) html += `<img src="${task.img}" class="task-img">`;
+                    html += `<br><button class="btn-blue" style="margin-top:10px;" onclick="approveTask(${task.id})">אשר והעבר להיסטוריה</button></div>`;
+                    li.innerHTML = html; listPending.appendChild(li);
+                } 
+                else if (task.status === 'history') {
+                    let html = `<div><strong>${task.he}</strong><br>${waitHtml}<span class="badge ${task.action === 'fixed' ? 'badge-green' : 'badge-red'}">${task.action === 'fixed' ? 'תוקן ✅' : 'לא תוקן ⚠️'}</span>`;
+                    if (task.noteHe) html += `<br><span style="font-size:14px; color:#555;">${task.noteHe}</span>`;
+                    if (task.img) html += `<br><img src="${task.img}" class="task-img" style="max-width:150px;">`;
+                    li.innerHTML = html + "</div>"; listHistory.appendChild(li);
+                }
+            });
+
+            if (activeSortable) activeSortable.destroy();
+            activeSortable = Sortable.create(listActive, {
+                animation: 150, handle: '.drag-handle', ghostClass: 'sortable-ghost',
+                onEnd: function () {
+                    const activeTasks = Array.from(listActive.children).map(li => tasks.find(t => t.id === Number(li.dataset.id)));
+                    tasks = [...activeTasks, ...tasks.filter(t => t.status !== 'active')]; 
+                    saveTasks(); 
+                }
+            });
+        }
+
+        function deleteTask(id) { if(confirm('למחוק משימה?')) { tasks = tasks.filter(t => t.id !== id); saveTasks(); renderManager(); } }
+        function approveTask(id) { const t = tasks.find(t => t.id === id); if (t) { t.status = 'history'; saveTasks(); renderManager(); } }
+
+        function toggleWorkerPreview() {
+            const isManagerVisible = !document.getElementById('manager-screen').classList.contains('hidden');
+            if (isManagerVisible) {
+                document.getElementById('manager-screen').classList.add('hidden');
+                document.getElementById('worker-preview').classList.remove('hidden');
+                document.body.dir = 'ltr'; // מעבר זמני למשמאל לימין כמו אצל העובד
+                renderPreview();
+            } else {
+                document.getElementById('worker-preview').classList.add('hidden');
+                document.getElementById('manager-screen').classList.remove('hidden');
+                document.body.dir = 'rtl';
+            }
+        }
+
+        function renderPreview() {
+            const list = document.getElementById('preview-list');
+            list.innerHTML = '';
+            const activeTasks = tasks.filter(t => t.status === 'active');
+            
+            activeTasks.forEach((task, index) => {
+                const isFirst = index === 0;
+                const days = getDaysWaiting(task);
+                
+                const card = document.createElement('div');
+                card.className = 'task-card' + (isFirst ? ' first-task-card' : '');
+                
+                card.innerHTML = `
+                    <div class="task-header">
+                        <div><span>🔧 ${task.es}</span><br><span style="font-size: 13px; color: #888;">⏳ ${days === 0 ? 'Hoy' : `Hace ${days} días`}</span></div>
+                        ${isFirst ? '' : '<span>🔽</span>'}
+                    </div>
+                    <div class="task-actions ${isFirst ? '' : 'hidden'}">
+                        <button class="btn-green">✅ Reparado</button>
+                        <button class="btn-red">⚠️ No se puede</button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+            if (list.innerHTML === '') list.innerHTML = '<h3 style="text-align:center; color:#888;">No hay tareas 🎉</h3>';
+        }
+
+        window.onload = () => { renderManager(); syncFromCloud(); };
+        setInterval(syncFromCloud, 10000);
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
+    </script>
+</body>
+</html>
