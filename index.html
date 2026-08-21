@@ -5,35 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ניהול משימות / Tareas</title>
     <link rel="manifest" href="manifest.json">
+    <!-- ספריית SortableJS לגרירת משימות נוחה בנייד -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
-        /* עיצוב בסיסי לאפליקציה */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
-        .container { max-width: 500px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         .hidden { display: none !important; }
+        h2, h3 { text-align: center; color: #333; margin-top: 0; }
+        input, textarea, button { width: 100%; margin-bottom: 15px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; font-family: inherit; }
+        button { cursor: pointer; font-weight: bold; border: none; color: white; transition: 0.2s; }
+        .btn-blue { background-color: #0056b3; } .btn-blue:hover { background-color: #004494; }
+        .btn-gray { background-color: #6c757d; margin-bottom: 25px; } .btn-gray:hover { background-color: #5a6268; }
+        .btn-green { background-color: #198754; } .btn-green:hover { background-color: #157347; }
+        .btn-red { background-color: #dc3545; } .btn-red:hover { background-color: #bb2d3b; }
         
-        h2 { text-align: center; color: #333; margin-top: 0; }
+        .task-card { background: #fdfdfd; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e1e1e1; overflow: hidden; }
+        .task-header { padding: 15px; font-size: 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .task-header:hover { background: #f8f9fa; }
+        .task-actions { padding: 15px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        .task-actions button { margin-bottom: 0; flex: 1; }
         
-        input, textarea, button { width: 100%; margin-bottom: 15px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; font-size: 16px; }
-        textarea { resize: vertical; font-family: inherit; }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 90%; max-width: 400px; }
         
-        button { background-color: #0056b3; color: white; border: none; cursor: pointer; font-weight: bold; transition: background 0.2s; }
-        button:hover { background-color: #004494; }
-        button:disabled { background-color: #999; cursor: not-allowed; }
+        .manager-list { list-style: none; padding: 0; }
+        .manager-list li { background: #fff; border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 8px; position: relative; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; margin-bottom: 10px; }
+        .badge-green { background: #198754; } .badge-red { background: #dc3545; } .badge-orange { background: #fd7e14; }
+        .task-img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
         
-        .logout-btn { background-color: #6c757d; margin-bottom: 25px; }
-        .logout-btn:hover { background-color: #5a6268; }
-        
-        ul { list-style-type: none; padding: 0; margin: 0; }
-        li { background: #fdfdfd; margin-bottom: 12px; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #e1e1e1; }
-        
-        .done { text-decoration: line-through; color: #999; }
-        .delete-btn { background-color: #dc3545; width: auto; padding: 8px 12px; margin: 0; font-size: 14px; }
-        
-        .checkbox-container { display: flex; align-items: center; gap: 12px; width: 100%; cursor: pointer;}
-        input[type="checkbox"] { width: 22px; height: 22px; margin: 0; cursor: pointer; }
-        .task-text { font-size: 18px; }
-        
-        .loader { font-size: 14px; color: #0056b3; text-align: center; margin-bottom: 15px; font-weight: bold; }
+        /* עיצוב ידית הגרירה */
+        .drag-handle { font-size: 24px; color: #adb5bd; cursor: grab; padding-right: 10px; user-select: none; }
+        .drag-handle:active { cursor: grabbing; color: #495057; }
+        .sortable-ghost { opacity: 0.4; background-color: #f8f9fa; }
     </style>
 </head>
 <body>
@@ -41,202 +45,264 @@
     <!-- מסך התחברות -->
     <div class="container" id="login-screen">
         <h2>התחברות / Iniciar sesión</h2>
-        <p style="text-align: center; color: #555;">הכנס קוד גישה / Ingrese el código</p>
-        <input type="password" id="pin-input" placeholder="קוד / Código" pattern="[0-9]*" inputmode="numeric">
-        <button onclick="checkPin()">היכנס / Entrar</button>
+        <input type="password" id="pin-input" placeholder="קוד / Código" inputmode="numeric">
+        <button class="btn-blue" onclick="checkPin()">היכנס / Entrar</button>
         <p id="login-error" style="color: #dc3545; text-align: center;" class="hidden">קוד שגוי / Código incorrecto</p>
     </div>
 
-    <!-- מסך מנהל (עברית) -->
+    <!-- מסך מנהל -->
     <div class="container hidden" id="manager-screen">
         <h2>ניהול משימות</h2>
-        <button onclick="logout()" class="logout-btn">התנתק (חזור למסך כניסה)</button>
+        <button class="btn-gray" onclick="logout()">התנתק (חזור למסך כניסה)</button>
         
-        <label for="task-input" style="display:block; margin-bottom: 8px; font-weight:bold;">הוסף משימות (כל שורה היא משימה נפרדת):</label>
-        <textarea id="task-input" rows="5" placeholder="לדוגמה:&#10;לנקות את המטבח&#10;לסדר את המחסן&#10;להוציא פח"></textarea>
-        <button onclick="addTasks()" id="add-btn">תרגם והוסף משימות</button>
-        <div id="loading" class="loader hidden">מתרגם את המשימות לספרדית, אנא המתן...</div>
+        <textarea id="task-input" rows="4" placeholder="הכנס משימות (כל שורה משימה נפרדת)"></textarea>
+        <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer; font-weight: bold;">
+            <input type="checkbox" id="require-verification" style="width: 20px; margin: 0;">
+            🔍 דרוש וידוא מנהל לאחר ביצוע
+        </label>
+        <button class="btn-blue" id="add-btn" onclick="addTasks()">תרגם והוסף משימות</button>
+        <p id="loading" class="hidden" style="color: #0056b3; text-align: center;">מעבד נתונים...</p>
 
-        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px;">משימות פעילות:</h3>
-        <ul id="manager-list"></ul>
+        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px;">משימות פעילות (ניתן לגרור לתעדוף)</h3>
+        <ul id="list-active" class="manager-list"></ul>
+
+        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px; color: #fd7e14;">ממתין לווידוא מנהל</h3>
+        <ul id="list-pending" class="manager-list"></ul>
+
+        <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px; margin-top: 30px; color: #6c757d;">היסטוריה (הושלם)</h3>
+        <ul id="list-history" class="manager-list"></ul>
     </div>
 
-    <!-- מסך עובד (ספרדית) -->
+    <!-- מסך עובד -->
     <div class="container hidden" id="worker-screen">
         <h2>Lista de Tareas</h2>
-        <button onclick="logout()" class="logout-btn">Cerrar sesión</button>
-        
-        <ul id="worker-list"></ul>
+        <button class="btn-gray" onclick="logout()">Cerrar sesión</button>
+        <div id="worker-list"></div>
+    </div>
+
+    <!-- מודל דיווח אי אפשר לתקן (לעובד) -->
+    <div class="modal hidden" id="cant-fix-modal">
+        <div class="modal-content">
+            <h3 style="color: #dc3545; text-align: center;">⚠️ No se puede</h3>
+            <textarea id="worker-note" rows="3" placeholder="¿Qué pasó? (Opcional)"></textarea>
+            <input type="file" id="worker-img" accept="image/*" capture="environment">
+            <button class="btn-red" id="save-modal-btn" onclick="saveCantFix()">Guardar (שמור)</button>
+            <button class="btn-gray" onclick="closeModal()">Cancelar (ביטול)</button>
+        </div>
     </div>
 
     <script>
-        // שמירת המשימות בזיכרון המקומי של הדפדפן
-        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        let tasks = JSON.parse(localStorage.getItem('tasks_v2')) || [];
+        let currentTaskId = null;
+        let activeSortable = null; // משתנה לשמירת מנגנון הגרירה
 
-        function saveTasks() {
-            localStorage.setItem('tasks', JSON.stringify(tasks));
+        function saveTasks() { localStorage.setItem('tasks_v2', JSON.stringify(tasks)); }
+
+        async function translateText(text, from, to) {
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+                const data = await res.json();
+                return data.responseData.translatedText;
+            } catch (e) { return text; }
         }
 
-        // מערכת התחברות
         function checkPin() {
             const pin = document.getElementById('pin-input').value;
-            if (pin === '1234') {
-                showManager();
-            } else if (pin === '1111') {
-                showWorker();
-            } else {
-                document.getElementById('login-error').classList.remove('hidden');
-            }
-        }
-
-        function logout() {
-            document.getElementById('manager-screen').classList.add('hidden');
-            document.getElementById('worker-screen').classList.add('hidden');
-            document.getElementById('login-screen').classList.remove('hidden');
+            if (pin === '1234') { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('manager-screen').classList.remove('hidden'); document.body.dir = 'rtl'; renderManager(); }
+            else if (pin === '1111') { document.getElementById('login-screen').classList.add('hidden'); document.getElementById('worker-screen').classList.remove('hidden'); document.body.dir = 'ltr'; renderWorker(); }
+            else { document.getElementById('login-error').classList.remove('hidden'); }
             document.getElementById('pin-input').value = '';
-            document.body.dir = 'rtl'; // ברירת מחדל עברית למסך התחברות
         }
 
-        function showManager() {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('manager-screen').classList.remove('hidden');
-            document.getElementById('login-error').classList.add('hidden');
-            document.body.dir = 'rtl'; // כיוון טקסט לעברית
-            renderManager();
-        }
+        function logout() { location.reload(); }
 
-        function showWorker() {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('worker-screen').classList.remove('hidden');
-            document.getElementById('login-error').classList.add('hidden');
-            document.body.dir = 'ltr'; // כיוון טקסט לספרדית (משמאל לימין)
-            renderWorker();
-        }
-
-        // הוספת משימות (כולל פיצול שורות ותרגום אוטומטי)
         async function addTasks() {
             const input = document.getElementById('task-input').value.trim();
+            const reqVerify = document.getElementById('require-verification').checked;
             if (!input) return;
-
-            // מפצל את הטקסט לשורות ומוחק שורות ריקות
-            const lines = input.split('\n').map(line => line.trim()).filter(line => line !== '');
-            if (lines.length === 0) return;
-
-            // הצגת מסך טעינה
+            const lines = input.split('\n').map(l => l.trim()).filter(l => l !== '');
+            
             document.getElementById('add-btn').disabled = true;
             document.getElementById('loading').classList.remove('hidden');
 
-            // לולאה שעוברת על כל שורה ומתרגמת אותה
             for (let line of lines) {
-                let hebrewText = line;
-                let spanishText = hebrewText; // ברירת מחדל במקרה של שגיאה
-
-                try {
-                    // שימוש ב-API חינמי לתרגום
-                    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(hebrewText)}&langpair=he|es`);
-                    const data = await response.json();
-                    if (data && data.responseData && data.responseData.translatedText) {
-                        spanishText = data.responseData.translatedText;
-                    }
-                } catch (error) {
-                    console.error('שגיאה בתרגום:', error);
-                }
-
-                // דחיפת המשימה החדשה לרשימה
+                let spanishText = await translateText(line, 'he', 'es');
                 tasks.push({
                     id: Date.now() + Math.random(),
-                    he: hebrewText,
+                    he: line,
                     es: spanishText,
-                    done: false
+                    requireVerification: reqVerify,
+                    status: 'active',
+                    action: null,
+                    noteHe: '',
+                    img: null
                 });
             }
-
             saveTasks();
             document.getElementById('task-input').value = '';
+            document.getElementById('require-verification').checked = false;
             document.getElementById('add-btn').disabled = false;
             document.getElementById('loading').classList.add('hidden');
             renderManager();
         }
 
-        // סימון משימה כבוצעה
-        function toggleTask(id) {
-            const task = tasks.find(t => t.id === id);
-            if (task) {
-                task.done = !task.done;
-                saveTasks();
-                // עדכון המסך הרלוונטי
-                if (!document.getElementById('manager-screen').classList.contains('hidden')) renderManager();
-                if (!document.getElementById('worker-screen').classList.contains('hidden')) renderWorker();
-            }
-        }
-
-        // מחיקת משימה (רק למנהל)
-        function deleteTask(id) {
-            if(confirm('האם אתה בטוח שברצונך למחוק משימה זו?')) {
-                tasks = tasks.filter(t => t.id !== id);
-                saveTasks();
-                renderManager();
-            }
-        }
-
-        // רינדור (ציור) מסך המנהל
         function renderManager() {
-            const list = document.getElementById('manager-list');
-            list.innerHTML = '';
+            const listActive = document.getElementById('list-active');
+            const listPending = document.getElementById('list-pending');
+            const listHistory = document.getElementById('list-history');
+            
+            listActive.innerHTML = ''; listPending.innerHTML = ''; listHistory.innerHTML = '';
+
             tasks.forEach(task => {
                 const li = document.createElement('li');
                 
-                const textSpan = document.createElement('span');
-                textSpan.className = 'task-text';
-                textSpan.textContent = task.he + (task.done ? ' (בוצע ✔️)' : '');
-                if (task.done) textSpan.classList.add('done');
+                if (task.status === 'active') {
+                    li.dataset.id = task.id; // שמירת המזהה לצורך גרירה
+                    let html = `<div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div><strong>${task.he}</strong><br>`;
+                    
+                    if (task.requireVerification) html += `<span class="badge badge-orange" style="margin-top:5px;">דורש וידוא</span>`;
+                    html += `<br><button class="btn-red" style="padding:5px 10px; margin-top:10px; width:auto;" onclick="deleteTask(${task.id})">מחק</button>
+                                    </div>
+                                    <div class="drag-handle">☰</div>
+                                </div>`;
+                    li.innerHTML = html;
+                    listActive.appendChild(li);
+                } 
+                else if (task.status === 'pending') {
+                    let html = `<strong>${task.he}</strong><br>`;
+                    const badgeClass = task.action === 'fixed' ? 'badge-green' : 'badge-red';
+                    const badgeText = task.action === 'fixed' ? 'תוקן ✅' : 'לא תוקן ⚠️';
+                    html += `<span class="badge ${badgeClass}" style="margin-top:5px;">${badgeText}</span><br>`;
+                    if (task.noteHe) html += `<p style="margin:5px 0; background:#f0f0f0; padding:8px; border-radius:5px;"><strong>הערת עובד:</strong> ${task.noteHe}</p>`;
+                    if (task.img) html += `<img src="${task.img}" class="task-img">`;
+                    html += `<br><button class="btn-blue" style="margin-top:10px;" onclick="approveTask(${task.id})">סמן כתקין (העבר להיסטוריה)</button>`;
+                    li.innerHTML = html;
+                    listPending.appendChild(li);
+                } 
+                else if (task.status === 'history') {
+                    let html = `<strong>${task.he}</strong><br>`;
+                    const badgeClass = task.action === 'fixed' ? 'badge-green' : 'badge-red';
+                    const badgeText = task.action === 'fixed' ? 'תוקן ✅' : 'לא תוקן ⚠️';
+                    html += `<span class="badge ${badgeClass}" style="margin-top:5px;">${badgeText}</span>`;
+                    if (task.noteHe) html += `<br><span style="font-size:14px; color:#555;">${task.noteHe}</span>`;
+                    if (task.img) html += `<br><img src="${task.img}" class="task-img" style="max-width:150px;">`;
+                    li.innerHTML = html;
+                    listHistory.appendChild(li);
+                }
+            });
 
-                const delBtn = document.createElement('button');
-                delBtn.textContent = 'מחק';
-                delBtn.className = 'delete-btn';
-                delBtn.onclick = () => deleteTask(task.id);
-
-                li.appendChild(textSpan);
-                li.appendChild(delBtn);
-                list.appendChild(li);
+            // הפעלת מנגנון הגרירה (Drag and Drop)
+            if (activeSortable) activeSortable.destroy();
+            activeSortable = Sortable.create(listActive, {
+                animation: 150,
+                handle: '.drag-handle', // אפשר לגרור רק מהידית
+                ghostClass: 'sortable-ghost',
+                onEnd: function () {
+                    // סדר את המערך מחדש לפי הסדר החדש במסך
+                    const newOrderIds = Array.from(listActive.children).map(li => Number(li.dataset.id));
+                    const activeTasks = newOrderIds.map(id => tasks.find(t => t.id === id));
+                    const otherTasks = tasks.filter(t => t.status !== 'active');
+                    
+                    tasks = [...activeTasks, ...otherTasks]; // מיזוג המשימות הפעילות החדשות עם השאר
+                    saveTasks(); // שמירה - העובד יראה את זה מיד!
+                }
             });
         }
 
-        // רינדור (ציור) מסך העובד
+        function deleteTask(id) {
+            if(confirm('למחוק משימה?')) { tasks = tasks.filter(t => t.id !== id); saveTasks(); renderManager(); }
+        }
+        function approveTask(id) {
+            const t = tasks.find(t => t.id === id);
+            if (t) { t.status = 'history'; saveTasks(); renderManager(); }
+        }
+
+        // --- פונקציות לעובד ---
         function renderWorker() {
             const list = document.getElementById('worker-list');
             list.innerHTML = '';
-            tasks.forEach(task => {
-                const li = document.createElement('li');
-                
-                const container = document.createElement('label');
-                container.className = 'checkbox-container';
-
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.checked = task.done;
-                checkbox.onchange = () => toggleTask(task.id);
-
-                const textSpan = document.createElement('span');
-                textSpan.className = 'task-text';
-                textSpan.textContent = task.es;
-                if (task.done) textSpan.classList.add('done');
-
-                container.appendChild(checkbox);
-                container.appendChild(textSpan);
-                li.appendChild(container);
-                
-                list.appendChild(li);
+            tasks.filter(t => t.status === 'active').forEach(task => {
+                const card = document.createElement('div');
+                card.className = 'task-card';
+                card.innerHTML = `
+                    <div class="task-header" onclick="toggleCard(${task.id})">
+                        <span>🔧 ${task.es}</span> <span>🔽</span>
+                    </div>
+                    <div class="task-actions hidden" id="actions-${task.id}">
+                        <button class="btn-green" onclick="markFixed(${task.id})">✅ Reparado</button>
+                        <button class="btn-red" onclick="openCantFix(${task.id})">⚠️ No se puede</button>
+                    </div>
+                `;
+                list.appendChild(card);
             });
+            if (list.innerHTML === '') list.innerHTML = '<h3 style="text-align:center; color:#888;">No hay tareas 🎉</h3>';
         }
 
-        // רישום ה-Service Worker כדי שהאפליקציה תעבוד גם כ-PWA
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(error => {
-                    console.log('Service Worker registration failed:', error);
-                });
-            });
+        function toggleCard(id) {
+            document.querySelectorAll('.task-actions').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`actions-${id}`).classList.remove('hidden');
+        }
+
+        function markFixed(id) {
+            const t = tasks.find(t => t.id === id);
+            if (t) {
+                t.action = 'fixed';
+                t.status = t.requireVerification ? 'pending' : 'history';
+                saveTasks(); renderWorker();
+            }
+        }
+
+        function openCantFix(id) {
+            currentTaskId = id;
+            document.getElementById('worker-note').value = '';
+            document.getElementById('worker-img').value = '';
+            document.getElementById('cant-fix-modal').classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('cant-fix-modal').classList.add('hidden'); }
+
+        async function saveCantFix() {
+            const noteEs = document.getElementById('worker-note').value.trim();
+            const fileInput = document.getElementById('worker-img');
+            const btn = document.getElementById('save-modal-btn');
+            
+            btn.disabled = true; btn.innerText = 'Guardando...';
+            
+            const t = tasks.find(t => t.id === currentTaskId);
+            if (!t) return closeModal();
+
+            t.noteHe = noteEs ? await translateText(noteEs, 'es', 'he') : '';
+            
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 600;
+                        const scale = Math.min(MAX_WIDTH / img.width, 1);
+                        canvas.width = img.width * scale;
+                        canvas.height = img.height * scale;
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        t.img = canvas.toDataURL('image/jpeg', 0.6); 
+                        finalizeCantFix(t);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                finalizeCantFix(t);
+            }
+        }
+
+        function finalizeCantFix(t) {
+            t.action = 'cant_fix';
+            t.status = t.requireVerification ? 'pending' : 'history';
+            saveTasks();
+            document.getElementById('save-modal-btn').disabled = false;
+            document.getElementById('save-modal-btn').innerText = 'Guardar (שמור)';
+            closeModal();
+            renderWorker();
         }
     </script>
 </body>
