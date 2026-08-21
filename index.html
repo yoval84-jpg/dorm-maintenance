@@ -1,11 +1,105 @@
-function markFixed(id) {
-    const t = tasks.find(t => t.id === id);
-    if (t) {
-        t.action = 'fixed';
-        // אם צריך וידוא -> עובר ל-pending (יחכה למנהל).
-        // אם לא צריך וידוא -> עובר ישר ל-history.
-        t.status = t.requireVerification ? 'pending' : 'history';
-        saveTasks(); 
-        renderWorker();
-    }
-}
+<!DOCTYPE html>
+<html lang="es" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Reparaciones</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0056b3">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        .task-card { background: #fdfdfd; margin-bottom: 12px; border-radius: 8px; border: 1px solid #e1e1e1; overflow: hidden; }
+        .task-header { padding: 15px; font-size: 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .task-actions { padding: 15px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        .btn { padding: 12px; border: none; border-radius: 6px; color: white; font-weight: bold; flex: 1; cursor: pointer; }
+        .btn-green { background-color: #198754; } .btn-red { background-color: #dc3545; }
+        .hidden { display: none !important; }
+        .first-task-card { border: 2px solid #0056b3; }
+        .first-task-card .task-header { cursor: default; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Lista de Reparaciones</h2>
+        <div id="worker-list"></div>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbwMMOW3IHeeWJGq7rsS0ptkl_JmiI01i39fhAFUOoHuLdLWPTQsu_Da8TIki0xCNqLTDA/exec";
+        let tasks = JSON.parse(localStorage.getItem('tasks_worker')) || [];
+
+        async function syncFromCloud() {
+            try {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                if(data && data.tasks && JSON.stringify(tasks) !== JSON.stringify(data.tasks)) {
+                    tasks = data.tasks;
+                    localStorage.setItem('tasks_worker', JSON.stringify(tasks));
+                    renderWorker();
+                }
+            } catch (e) {}
+        }
+
+        function renderWorker() {
+            const list = document.getElementById('worker-list');
+            list.innerHTML = '';
+            const activeTasks = tasks.filter(t => t.status === 'active');
+            
+            activeTasks.forEach((task, index) => {
+                const isFirst = index === 0;
+                const card = document.createElement('div');
+                card.className = 'task-card' + (isFirst ? ' first-task-card' : '');
+                
+                card.innerHTML = `
+                    <div class="task-header" ${isFirst ? '' : `onclick="toggleCard(${task.id})"`}>
+                        <div>🔧 ${task.es}</div>
+                        ${isFirst ? '' : '<span>🔽</span>'}
+                    </div>
+                    <div class="task-actions ${isFirst ? '' : 'hidden'}" id="actions-${task.id}">
+                        <button class="btn btn-green" onclick="markFixed(${task.id})">✅ Reparado</button>
+                        <button class="btn btn-red" onclick="markCantFix(${task.id})">⚠️ No se puede</button>
+                    </div>
+                `;
+                list.appendChild(card);
+            });
+        }
+
+        function toggleCard(id) {
+            const target = document.getElementById(`actions-${id}`);
+            const isHidden = target.classList.contains('hidden');
+            document.querySelectorAll('.task-actions').forEach(el => el.classList.add('hidden'));
+            if (isHidden) target.classList.remove('hidden');
+        }
+
+        async function markFixed(id) {
+            const t = tasks.find(t => t.id === id);
+            if (t) {
+                t.status = t.requireVerification ? 'pending' : 'history';
+                await saveTasks(); renderWorker();
+            }
+        }
+
+        async function markCantFix(id) {
+            const t = tasks.find(t => t.id === id);
+            if (t) {
+                t.status = t.requireVerification ? 'pending' : 'history';
+                t.action = 'cant_fix';
+                await saveTasks(); renderWorker();
+            }
+        }
+
+        async function saveTasks() {
+            localStorage.setItem('tasks_worker', JSON.stringify(tasks));
+            try {
+                await fetch(API_URL, { method: 'POST', body: JSON.stringify({ actionType: 'SAVE_ALL', tasks: tasks }) });
+            } catch (e) {}
+        }
+
+        window.onload = () => { renderWorker(); syncFromCloud(); };
+        setInterval(syncFromCloud, 10000);
+    </script>
+</body>
+</html>
