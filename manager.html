@@ -1,42 +1,150 @@
-function renderPreview() {
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ניהול תיקונים</title>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; background-color: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        h2, h3 { text-align: center; color: #333; }
+        textarea, button { width: 100%; margin-bottom: 15px; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; font-family: inherit; }
+        button { cursor: pointer; font-weight: bold; border: none; color: white; }
+        .btn-blue { background-color: #0056b3; } .btn-green { background-color: #198754; } .btn-red { background-color: #dc3545; }
+        .btn-gray { background-color: #6c757d; }
+        .manager-list { list-style: none; padding: 0; }
+        .manager-list li { background: #fff; border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
+        .badge-green { background: #198754; } .badge-orange { background: #fd7e14; }
+        .hidden { display: none !important; }
+        /* תצוגת עובד מקדימה */
+        #worker-preview { background-color: #e9ecef; border: 2px dashed #6c757d; padding: 20px; border-radius: 12px; }
+        .task-card { background: #fff; margin-bottom: 10px; border-radius: 8px; border: 1px solid #ddd; overflow: hidden; }
+        .task-header { padding: 15px; font-size: 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .task-actions { padding: 15px; background: #f8f9fa; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        .first-task-card { border: 2px solid #0056b3; }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="manager-screen">
+        <button onclick="toggleWorkerPreview()" style="width: auto; background: #6c757d;">👁️ תצוגת עובד</button>
+        <h2>ניהול משימות</h2>
+        <textarea id="task-input" rows="3" placeholder="הכנס משימות חדשות (שורה לכל משימה)"></textarea>
+        <label><input type="checkbox" id="require-verification"> 🔍 דרוש וידוא מנהל</label>
+        <button class="btn-blue" onclick="addTasks()">הוסף משימות</button>
+
+        <h3>פעילות</h3>
+        <ul id="list-active" class="manager-list"></ul>
+        <h3>ממתין לווידוא</h3>
+        <ul id="list-pending" class="manager-list"></ul>
+        <h3>היסטוריה</h3>
+        <ul id="list-history" class="manager-list"></ul>
+    </div>
+
+    <div class="container hidden" id="worker-preview" dir="ltr">
+        <h2>Vista previa</h2>
+        <div id="preview-list"></div>
+        <button class="btn-gray" onclick="toggleWorkerPreview()">חזור לניהול</button>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbwMMOW3IHeeWJGq7rsS0ptkl_JmiI01i39fhAFUOoHuLdLWPTQsu_Da8TIki0xCNqLTDA/exec";
+        let tasks = JSON.parse(localStorage.getItem('tasks_manager')) || [];
+
+        async function syncFromCloud() {
+            try {
+                const res = await fetch(API_URL);
+                const data = await res.json();
+                if(data && data.tasks) {
+                    tasks = data.tasks;
+                    localStorage.setItem('tasks_manager', JSON.stringify(tasks));
+                    renderManager();
+                }
+            } catch (e) {}
+        }
+
+        async function saveTasks() {
+            localStorage.setItem('tasks_manager', JSON.stringify(tasks));
+            await fetch(API_URL, { method: 'POST', body: JSON.stringify({ actionType: 'SAVE_ALL', tasks: tasks }) });
+        }
+
+        function renderManager() {
+            const listActive = document.getElementById('list-active');
+            const listPending = document.getElementById('list-pending');
+            const listHistory = document.getElementById('list-history');
+            listActive.innerHTML = ''; listPending.innerHTML = ''; listHistory.innerHTML = '';
+
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                if (task.status === 'active') {
+                    li.innerHTML = `<div><strong>${task.he}</strong></div><button class="btn-red" onclick="deleteTask(${task.id})">מחק</button>`;
+                    listActive.appendChild(li);
+                } else if (task.status === 'pending') {
+                    li.innerHTML = `<div><strong>${task.he}</strong><br><span class="badge badge-orange">ממתין לאישור</span></div><button class="btn-green" onclick="approveTask(${task.id})">אשר</button>`;
+                    listPending.appendChild(li);
+                } else if (task.status === 'history') {
+                    li.innerHTML = `<div><strong>${task.he}</strong><br><span class="badge badge-green">הושלם</span></div>`;
+                    listHistory.appendChild(li);
+                }
+            });
+        }
+
+        async function addTasks() {
+            const input = document.getElementById('task-input').value.trim();
+            if (!input) return;
+            const req = document.getElementById('require-verification').checked;
+            const lines = input.split('\n');
+            for (let line of lines) {
+                tasks.push({ id: Date.now()+Math.random(), he: line, es: "Traducir: " + line, status: 'active', requireVerification: req });
+            }
+            await saveTasks();
+            document.getElementById('task-input').value = '';
+            renderManager();
+        }
+
+        function approveTask(id) {
+            const t = tasks.find(t => t.id === id);
+            t.status = 'history';
+            saveTasks(); renderManager();
+        }
+
+        function deleteTask(id) { tasks = tasks.filter(t => t.id !== id); saveTasks(); renderManager(); }
+
+        function toggleWorkerPreview() {
+            document.getElementById('manager-screen').classList.toggle('hidden');
+            document.getElementById('worker-preview').classList.toggle('hidden');
+            if(!document.getElementById('worker-preview').classList.contains('hidden')) renderPreview();
+        }
+
+        function renderPreview() {
             const list = document.getElementById('preview-list');
             list.innerHTML = '';
-            const activeTasks = tasks.filter(t => t.status === 'active');
-            
-            activeTasks.forEach((task, index) => {
+            tasks.filter(t => t.status === 'active').forEach((task, index) => {
                 const isFirst = index === 0;
                 const card = document.createElement('div');
-                card.className = 'task-card' + (isFirst ? ' first-task-card' : '');
-                
-                // למשימה הראשונה אין חצים והיא פתוחה תמיד. לאחרות יש אפשרות פתיחה/סגירה.
-                const arrow = isFirst ? '' : '<span>🔽</span>';
-                const actionsHidden = isFirst ? '' : 'hidden';
-                const toggleFunc = isFirst ? '' : `onclick="togglePreviewCard(${task.id})"`;
-                
+                card.className = 'task-card ' + (isFirst ? 'first-task-card' : '');
                 card.innerHTML = `
-                    <div class="task-header" ${toggleFunc} style="cursor: ${isFirst ? 'default' : 'pointer'};">
-                        <div><span>🔧 ${task.es}</span></div>
-                        ${arrow}
+                    <div class="task-header" ${isFirst ? '' : `onclick="this.nextElementSibling.classList.toggle('hidden')"`}>
+                        <div>🔧 ${task.es}</div>
                     </div>
-                    <div class="task-actions ${actionsHidden}" id="preview-actions-${task.id}">
-                        <button class="btn-green" onclick="previewAction('fixed', ${task.id})">✅ Reparado</button>
-                        <button class="btn-red" onclick="previewAction('cant_fix', ${task.id})">⚠️ No se puede</button>
+                    <div class="task-actions ${isFirst ? '' : 'hidden'}">
+                        <button class="btn btn-green" onclick="previewAction(${task.id})">✅ Reparado</button>
                     </div>
                 `;
                 list.appendChild(card);
             });
-            if (list.innerHTML === '') list.innerHTML = '<h3 style="text-align:center; color:#888;">No hay tareas 🎉</h3>';
         }
 
-        // פונקציית פתיחה/סגירה בלחיצה למנהל בתצוגה המקדימה
-        function togglePreviewCard(id) {
-            const target = document.getElementById(`preview-actions-${id}`);
-            const isHidden = target.classList.contains('hidden');
-            
-            // סגירת השאר
-            document.querySelectorAll('#preview-list .task-actions').forEach(el => {
-                if (!el.parentElement.classList.contains('first-task-card')) el.classList.add('hidden');
-            });
-            
-            if (isHidden) target.classList.remove('hidden');
+        async function previewAction(id) {
+            const t = tasks.find(t => t.id === id);
+            t.status = t.requireVerification ? 'pending' : 'history';
+            await saveTasks();
+            renderPreview();
         }
+
+        window.onload = () => { renderManager(); syncFromCloud(); };
+    </script>
+</body>
+</html>
