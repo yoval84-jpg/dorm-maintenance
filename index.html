@@ -65,6 +65,7 @@
                 `;
                 list.appendChild(card);
             });
+            if (activeTasks.length === 0) list.innerHTML = '<h3 style="text-align:center; color:#888;">No hay tareas 🎉</h3>';
         }
 
         function toggleCard(id) {
@@ -72,11 +73,13 @@
             const isHidden = target.classList.contains('hidden');
             document.querySelectorAll('.task-actions').forEach(el => el.classList.add('hidden'));
             if (isHidden) target.classList.remove('hidden');
+            event.stopPropagation();
         }
 
         async function markFixed(id) {
             const t = tasks.find(t => t.id === id);
             if (t) {
+                t.action = 'fixed';
                 t.status = t.requireVerification ? 'pending' : 'history';
                 await saveTasks(); renderWorker();
             }
@@ -85,8 +88,8 @@
         async function markCantFix(id) {
             const t = tasks.find(t => t.id === id);
             if (t) {
-                t.status = t.requireVerification ? 'pending' : 'history';
                 t.action = 'cant_fix';
+                t.status = t.requireVerification ? 'pending' : 'history';
                 await saveTasks(); renderWorker();
             }
         }
